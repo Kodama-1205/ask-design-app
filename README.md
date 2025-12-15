@@ -1,3 +1,23 @@
+# Ask Design
+
+AIに「何を聞けばいいか」を設計するためのWebアプリです。  
+ユーザーの目的・状況・スキルに応じて、最適な質問文（プロンプト）を生成します。
+
+## Tech Stack
+- Next.js (App Router)
+- TypeScript
+- Tailwind CSS
+- Dify (API)
+
+## Setup
+```bash
+npm install
+npm run dev
+
+
+
+
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
