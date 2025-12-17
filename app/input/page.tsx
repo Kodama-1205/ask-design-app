@@ -1,149 +1,117 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-const TOOL_OPTIONS = ["Excel", "Slack", "Gmail", "ChatGPT", "その他"] as const;
-type Tool = (typeof TOOL_OPTIONS)[number];
+const STORAGE_KEY = "promptgen_payload";
+type SkillLevel = "初心者" | "中級" | "上級";
 
 export default function InputPage() {
   const router = useRouter();
 
   const [goal, setGoal] = useState("");
   const [context, setContext] = useState("");
-  const [skillLevel, setSkillLevel] = useState<"beginner" | "intermediate" | "advanced">("beginner");
-  const [tools, setTools] = useState<Tool[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [skillLevel, setSkillLevel] = useState<SkillLevel>("初心者");
+  const [tools, setTools] = useState("");
 
-  const canGenerate = useMemo(() => {
-    return goal.trim().length > 0 && context.trim().length > 0;
-  }, [goal, context]);
+  const canSubmit = useMemo(() => {
+    return goal.trim() && context.trim() && skillLevel && tools.trim();
+  }, [goal, context, skillLevel, tools]);
 
-  const toggleTool = (t: Tool) => {
-    setTools((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  const payload = useMemo(
+    () => ({
+      goal: goal.trim(),
+      context: context.trim(),
+      skill_level: skillLevel,
+      tools: tools.trim(),
+    }),
+    [goal, context, skillLevel, tools]
+  );
+
+  const onSubmit = () => {
+    if (!canSubmit) return;
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    router.push("/result");
   };
 
-  const onGenerate = async () => {
-    setError(null);
-
-    if (!canGenerate) {
-      setError("目的と現状を入力してください。");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          goal,
-          context,
-          skill_level: skillLevel,
-          tools,
-        }),
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        throw new Error(`API error: ${response.status} ${text}`);
-      }
-
-      const data = await response.json();
-
-      // result画面に渡す（URLに乗せず sessionStorage を使う）
-      sessionStorage.setItem("askdesign_generated_prompt", String(data.generated_prompt ?? ""));
-      sessionStorage.setItem("askdesign_explanation", String(data.explanation ?? ""));
-
-      router.push("/result");
-    } catch (e: any) {
-      console.error("Generate error:", e);
-      setError("生成に失敗しました。もう一度お試しください。");
-    } finally {
-      setLoading(false);
-    }
+  const fillExample = () => {
+    setGoal("DifyのWorkflowでプロンプト生成アプリを完成させたい");
+    setContext("入力フォームは完成。/result で見やすく表示しCopyボタンも付けたい。");
+    setSkillLevel("初心者");
+    setTools("Dify, Next.js, Slack");
   };
 
   return (
-    <main className="min-h-screen bg-white flex justify-center">
-      <div className="w-full max-w-2xl px-6 py-10 space-y-6">
-        <h1 className="text-2xl font-bold text-green-700">入力フォーム</h1>
+    <div style={styles.page}>
+      <div style={styles.container}>
+        <h1 style={styles.h1}>/input</h1>
 
-        <div className="space-y-2">
-          <label className="font-semibold">目的</label>
-          <textarea
-            className="w-full border rounded-lg p-3"
-            rows={3}
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            placeholder="例：売上レポートを自動化したい"
-          />
+        <div style={styles.card}>
+          <div style={styles.label}>目的（goal）</div>
+          <textarea style={styles.ta} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="何を達成したいか" />
         </div>
 
-        <div className="space-y-2">
-          <label className="font-semibold">現状</label>
+        <div style={styles.card}>
+          <div style={styles.label}>現状（context）</div>
           <textarea
-            className="w-full border rounded-lg p-3"
-            rows={4}
+            style={styles.ta}
             value={context}
             onChange={(e) => setContext(e.target.value)}
-            placeholder="例：毎週Excel集計してSlackに送っているが時間がかかる"
+            placeholder="今どんな状態か / 課題は何か"
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="font-semibold">スキルレベル</label>
-          <div className="flex gap-4">
-            {[
-              { v: "beginner", label: "初心者" },
-              { v: "intermediate", label: "中級" },
-              { v: "advanced", label: "上級" },
-            ].map((x) => (
-              <label key={x.v} className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="skill"
-                  value={x.v}
-                  checked={skillLevel === x.v}
-                  onChange={() => setSkillLevel(x.v as any)}
-                />
-                {x.label}
-              </label>
-            ))}
+        <div style={styles.grid2}>
+          <div style={styles.card}>
+            <div style={styles.label}>スキル（skill_level）</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(["初心者", "中級", "上級"] as SkillLevel[]).map((lv) => (
+                <button
+                  key={lv}
+                  onClick={() => setSkillLevel(lv)}
+                  style={{ ...styles.pill, ...(skillLevel === lv ? styles.pillActive : {}) }}
+                >
+                  {lv}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.label}>使用ツール（tools）</div>
+            <input style={styles.input} value={tools} onChange={(e) => setTools(e.target.value)} placeholder="例：Excel, Slack, Gmail" />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="font-semibold">使用ツール</label>
-          <div className="flex flex-wrap gap-3">
-            {TOOL_OPTIONS.map((t) => (
-              <label key={t} className="flex items-center gap-2 border rounded-full px-3 py-1">
-                <input
-                  type="checkbox"
-                  checked={tools.includes(t)}
-                  onChange={() => toggleTool(t)}
-                />
-                {t}
-              </label>
-            ))}
-          </div>
+        <div style={styles.card}>
+          <div style={styles.label}>送信payload（確認用）</div>
+          <pre style={styles.pre}>{JSON.stringify(payload, null, 2)}</pre>
         </div>
 
-        {error && (
-          <div className="border border-red-300 bg-red-50 text-red-700 rounded-lg p-3">
-            {error}
-          </div>
-        )}
-
-        <button
-          onClick={onGenerate}
-          disabled={loading}
-          className="w-full bg-green-600 text-white rounded-lg py-3 font-semibold disabled:opacity-60"
-        >
-          {loading ? "生成中…" : "生成する"}
-        </button>
+        <div style={{ display: "flex", gap: 8, justifyContent: "space-between", flexWrap: "wrap" }}>
+          <button style={styles.btnGhost} onClick={fillExample}>例を入力</button>
+          <button style={{ ...styles.btn, ...(canSubmit ? {} : styles.btnDisabled) }} onClick={onSubmit} disabled={!canSubmit}>
+            生成する →
+          </button>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  page: { padding: 24 },
+  container: { maxWidth: 900, margin: "0 auto", display: "grid", gap: 16 },
+  h1: { fontSize: 26, fontWeight: 900 },
+  card: { border: "1px solid #e5e7eb", borderRadius: 14, padding: 16 },
+  label: { fontWeight: 900, marginBottom: 8 },
+  ta: { width: "100%", minHeight: 120, padding: 12, borderRadius: 12, border: "1px solid #d1d5db", lineHeight: 1.7 },
+  input: { width: "100%", padding: 12, borderRadius: 12, border: "1px solid #d1d5db" },
+  pre: { margin: 0, fontSize: 12, overflowX: "auto" },
+  grid2: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 16 },
+  pill: { border: "1px solid #d1d5db", borderRadius: 999, padding: "10px 14px", fontWeight: 900, background: "transparent", cursor: "pointer" },
+  pillActive: { borderColor: "#16a34a", background: "rgba(22,163,74,0.12)" },
+  btn: { background: "#16a34a", color: "#fff", border: "none", padding: "12px 16px", borderRadius: 12, fontWeight: 900, cursor: "pointer" },
+  btnGhost: { background: "transparent", border: "1px solid #d1d5db", padding: "12px 16px", borderRadius: 12, fontWeight: 900, cursor: "pointer" },
+  btnDisabled: { opacity: 0.5, cursor: "not-allowed" },
+};
