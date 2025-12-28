@@ -1,0 +1,59 @@
+.page { min-height: 100vh; background: #f8fafc; padding: 24px 16px; }
+.container { max-width: 980px; margin: 0 auto; }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; }
+.title { font-size: 22px; font-weight: 900; color: #0f172a; margin: 0; }
+.sub { font-size: 13px; font-weight: 800; color: #64748b; margin: 4px 0 0; }
+.headerActions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.card {
+  background: #fff;
+  border: 1px solid rgba(148,163,184,.35);
+  border-radius: 18px;
+  box-shadow: 0 14px 45px rgba(0,0,0,0.06);
+  padding: 16px;
+}
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.toolbarTitle { font-size: 14px; font-weight: 900; color: #0f172a; }
+.toolbarActions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.label { display: block; margin: 12px 0 6px; font-size: 12px; font-weight: 900; color: #0f172a; }
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.45);
+  font-size: 14px;
+  font-weight: 700;
+  outline: none;
+}
+.input:focus { border-color: rgba(34,197,94,.6); box-shadow: 0 0 0 4px rgba(34,197,94,.12); }
+
+.error {
+  margin-top: 12px;
+  background: rgba(239,68,68,.06);
+  border: 1px solid rgba(239,68,68,.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #991b1b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.btnGhost {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 12px; border-radius: 12px;
+  border: 1px solid rgba(148,163,184,.45);
+  background: #fff; color: #0f172a; font-weight: 900; text-decoration: none;
+}
+.btnPrimary {
+  margin-top: 14px;
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 12px; border-radius: 12px;
+  border: none;
+  background: #16a34a; color: #fff; font-weight: 900;
+  cursor: pointer;
+}
+
+.note { margin-top: 10px; color: #64748b; font-size: 12px; line-height: 1.6; font-weight: 700; }

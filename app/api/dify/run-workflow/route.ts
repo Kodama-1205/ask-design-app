@@ -1,78 +1,159 @@
-import { NextResponse } from "next/server";
+// app/api/dify/run-workflow/route.ts
+import { NextResponse } from 'next/server';
+
+export const runtime = 'nodejs'; // fetch先や環境変数を安定させる
+
+type AnyObj = Record<string, any>;
+
+function pickFirstString(...candidates: any[]): string {
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c;
+  }
+  return '';
+}
+
+function normalizeDifyResponse(payload: AnyObj) {
+  // Difyレスポンスの “ゆれ” を全部拾う
+  const generated_prompt = pickFirstString(
+    payload?.generated_prompt,
+    payload?.outputs?.generated_prompt,
+    payload?.data?.outputs?.generated_prompt,
+    payload?.data?.generated_prompt,
+    payload?.answer, // chat系の名残
+    payload?.data?.answer,
+    payload?.text, // テキスト系の名残
+    payload?.data?.text
+  );
+
+  const explanation = pickFirstString(
+    payload?.explanation,
+    payload?.outputs?.explanation,
+    payload?.data?.outputs?.explanation,
+    payload?.data?.explanation
+  );
+
+  return { generated_prompt, explanation };
+}
+
+function safeJsonParse(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const { inputs } = await req.json();
+    const baseUrl = (process.env.DIFY_BASE_URL || 'https://api.dify.ai').replace(/\/$/, '');
+    const apiKey = process.env.DIFY_API_KEY;
 
-    const DIFY_BASE_URL = process.env.DIFY_BASE_URL;
-    const DIFY_API_KEY = process.env.DIFY_API_KEY;
-
-    if (!DIFY_BASE_URL || !DIFY_API_KEY) {
+    if (!apiKey) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: "ENV_NOT_SET",
-          DIFY_BASE_URL: DIFY_BASE_URL ?? null,
-          DIFY_API_KEY: DIFY_API_KEY ? "SET" : null,
-        },
+        { error: 'Missing env: DIFY_API_KEY' },
         { status: 500 }
       );
     }
 
-    const url = `${DIFY_BASE_URL.replace(/\/+$/, "")}/v1/workflows/run`;
+    const body = (await req.json().catch(() => ({}))) as AnyObj;
 
-    const r = await fetch(url, {
-      method: "POST",
+    // ここで “入力の最低限” を揃える（フロントの揺れも吸収）
+    const inputs: AnyObj = {
+      goal: body?.goal ?? '',
+      context: body?.context ?? '',
+      skill_level: body?.skill_level ?? body?.skillLevel ?? '',
+      tools: body?.tools ?? '',
+      // 追加で何が来ても一応通す（将来拡張用）
+      ...Object.fromEntries(
+        Object.entries(body || {}).filter(
+          ([k]) => !['goal', 'context', 'skill_level', 'skillLevel', 'tools'].includes(k)
+        )
+      ),
+    };
+
+    // goal は最低限必須（空なら400）
+    if (!String(inputs.goal || '').trim()) {
+      return NextResponse.json({ error: 'goal is required' }, { status: 400 });
+    }
+
+    // Dify Workflow Run API（blocking推奨）
+    // ※ Difyの「Workflow App」のAPIキーが前提（workflow_id不要）
+    const difyReqBody = {
+      inputs,
+      response_mode: 'blocking',
+      user: body?.user ?? 'askdesign',
+    };
+
+    const difyRes = await fetch(`${baseUrl}/v1/workflows/run`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${DIFY_API_KEY}`,
-        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        inputs,
-        response_mode: "blocking",
-        user: "webapp-user",
-      }),
+      body: JSON.stringify(difyReqBody),
     });
 
-    const contentType = r.headers.get("content-type") || "";
-    const bodyText = await r.text();
+    const rawText = await difyRes.text();
+    const payload = safeJsonParse(rawText);
 
-    // DifyがJSON以外(HTMLなど)を返してきても、必ずJSONで返す
-    if (!contentType.includes("application/json")) {
+    // DifyがJSON以外返した場合
+    if (!payload) {
       return NextResponse.json(
         {
-          ok: false,
-          error: "NON_JSON_RESPONSE_FROM_DIFY",
-          requestUrl: url,
-          status: r.status,
-          contentType,
-          bodyPreview: bodyText.slice(0, 900),
+          error: 'Dify returned non-JSON response',
+          status: difyRes.status,
+          raw: rawText.slice(0, 2000),
+        },
+        { status: 502 }
+      );
+    }
+
+    // Dify側エラー（例：401/429/500等）
+    if (!difyRes.ok) {
+      return NextResponse.json(
+        {
+          error: 'Dify API error',
+          status: difyRes.status,
+          message:
+            payload?.message ||
+            payload?.error ||
+            payload?.detail ||
+            'Unknown Dify error',
+          dify: payload,
+        },
+        { status: 502 }
+      );
+    }
+
+    const { generated_prompt, explanation } = normalizeDifyResponse(payload);
+
+    // 正規化の最終保証：generated_prompt が空なら「どこが返ってないか」情報も添えて返す
+    if (!String(generated_prompt).trim()) {
+      return NextResponse.json(
+        {
+          error: 'generated_prompt is empty after normalization',
           hint:
-            "DIFY_BASE_URL が Web UI を指している可能性が高いです。https://api.dify.ai にしてください。",
+            'DifyのOutputノードで generated_prompt / explanation を出すか、LLMのtextが返る設定になっているか確認してください。',
+          dify: payload,
         },
         { status: 502 }
       );
     }
 
-    // JSONとして返す（Difyの成功/失敗もそのまま返す）
-    let json: any;
-    try {
-      json = JSON.parse(bodyText);
-    } catch {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "JSON_PARSE_FAILED",
-          requestUrl: url,
-          status: r.status,
-          bodyPreview: bodyText.slice(0, 900),
-        },
-        { status: 502 }
-      );
-    }
-
-    return NextResponse.json({ ok: true, dify: json }, { status: 200 });
+    // ✅ ここが “正規化の本体” ：フロントはこれだけ見れば良い
+    return NextResponse.json(
+      {
+        generated_prompt: String(generated_prompt),
+        explanation: String(explanation || ''),
+        // デバッグしたい時のために raw を残したいならコメントアウト解除
+        // raw: payload,
+      },
+      { status: 200 }
+    );
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: "SERVER_ERROR", message: e?.message ?? "Unknown" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? 'Unknown server error' },
+      { status: 500 }
+    );
   }
 }

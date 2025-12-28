@@ -1,14 +1,9 @@
-export const metadata = {
-  title: "Prompt Generator",
-  description: "Dify workflow runner",
-};
+import "./globals.css";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja">
-      <body style={{ margin: 0, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-        {children}
-      </body>
+      <body className="min-h-screen bg-neutral-50 text-neutral-900">{children}</body>
     </html>
   );
 }
