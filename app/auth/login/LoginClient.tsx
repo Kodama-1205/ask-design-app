@@ -32,7 +32,11 @@ export default function LoginClient() {
       });
 
       if (authError) {
-        setError(authError.message);
+        setError(
+          authError.message.includes('Supabase env missing')
+            ? 'Supabase環境変数が未設定です。Vercel/ローカルに NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY を設定してください。'
+            : authError.message
+        );
         return;
       }
 
