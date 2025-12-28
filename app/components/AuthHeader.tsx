@@ -1,155 +1,102 @@
-// app/components/AuthHeader.tsx
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '../../lib/supabase/client';
 import { buildLoginUrl, buildSignupUrl, getCurrentPathWithSearch } from '../../lib/askdesign/returnTo';
 import styles from './AuthHeader.module.css';
 
 type UserState =
   | { status: 'loading' }
-  | { status: 'guest' }
-  | { status: 'authed'; email?: string | null };
-
-const NAV_ITEMS = [
-  { href: '/input', label: '/input' },
-  { href: '/templates', label: '/templates' },
-  { href: '/result', label: '/result' },
-] as const;
+  | { status: 'signedOut' }
+  | { status: 'signedIn'; email?: string | null };
 
 export default function AuthHeader() {
   const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+
+  const supabase = useMemo(() => createClient(), []);
 
   const [userState, setUserState] = useState<UserState>({ status: 'loading' });
 
-  const returnTo = useMemo(() => {
+  const safeNextPath = useMemo(() => {
     if (!pathname) return '/input';
     if (pathname.startsWith('/auth')) return '/input';
-    return getCurrentPathWithSearch();
-  }, [pathname]);
+    // ✅ 引数必須：pathname と searchParams を渡す
+    return getCurrentPathWithSearch(pathname, searchParams);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     let mounted = true;
 
-    const syncUser = async () => {
+    const run = async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        const user = data?.user;
-
         if (!mounted) return;
 
-        if (!user) setUserState({ status: 'guest' });
-        else setUserState({ status: 'authed', email: user.email });
+        const user = data?.user;
+        if (!user) {
+          setUserState({ status: 'signedOut' });
+          return;
+        }
+        setUserState({ status: 'signedIn', email: user.email });
       } catch {
         if (!mounted) return;
-        setUserState({ status: 'guest' });
+        setUserState({ status: 'signedOut' });
       }
     };
 
-    syncUser();
+    run();
 
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      syncUser();
+      run();
     });
 
     return () => {
       mounted = false;
-      sub?.subscription?.unsubscribe?.();
+      sub.subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabase]);
 
-  const logout = async () => {
+  const onLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/');
+    router.refresh();
   };
 
-  const activeHref = useMemo(() => {
-    // /templates/xxx とかを今後作っても拾えるように startsWith に寄せる
-    const p = pathname || '';
-    const hit = NAV_ITEMS.find((x) => p === x.href || p.startsWith(`${x.href}/`));
-    return hit?.href ?? null;
-  }, [pathname]);
-
   return (
-    <div className={styles.wrap}>
-      {/* Left: Brand */}
-      <div className={styles.left}>
-        <Link className={styles.brand} href="/">
-          <span className={styles.logo} aria-hidden>
-            <span className={styles.logoDot} />
+    <header className={styles.header}>
+      <div className={styles.inner}>
+        <Link href="/" className={styles.brand}>
+          <span className={styles.brandMark} aria-hidden>
+            ✨
           </span>
-          <span className={styles.brandText}>
-            <span className={styles.brandName}>Ask Design</span>
-            <span className={styles.brandSub}>Prompt Generator</span>
-          </span>
+          <span className={styles.brandText}>Ask Design</span>
         </Link>
-      </div>
 
-      {/* Right: Nav + Auth */}
-      <div className={styles.right}>
-        {/* Nav (ログイン中のみ表示) */}
-        <div className={styles.nav}>
-          {userState.status === 'authed' &&
-            NAV_ITEMS.map((x) => {
-              const isActive = activeHref === x.href;
-              return (
-                <button
-                  key={x.href}
-                  type="button"
-                  onClick={() => router.push(x.href)}
-                  className={isActive ? styles.navActive : styles.navBtn}
-                  disabled={isActive}
-                  title={isActive ? '現在のページ' : x.label}
-                >
-                  {x.label}
-                </button>
-              );
-            })}
-        </div>
-
-        {/* User pill */}
-        <div className={styles.userPill}>
-          {userState.status === 'loading' && (
-            <span className={styles.userLabel}>認証確認中…</span>
-          )}
-
-          {userState.status === 'guest' && (
-            <>
-              <span className={styles.userLabel}>ゲスト</span>
-              <div className={styles.actions}>
-                <Link className={styles.btnGhost} href={buildLoginUrl(returnTo)}>
-                  ログイン
-                </Link>
-                <Link className={styles.btnPrimary} href={buildSignupUrl(returnTo)}>
-                  新規登録
-                </Link>
-              </div>
-            </>
-          )}
-
-          {userState.status === 'authed' && (
-            <>
-              <span className={styles.userLabel} title={userState.email ?? ''}>
-                <span className={styles.userDot} aria-hidden />
-                <span className={styles.userEmail}>
-                  {userState.email ? userState.email : 'ログイン中'}
-                </span>
-              </span>
-
-              <div className={styles.actions}>
-                <button className={styles.btnPrimary} type="button" onClick={logout}>
-                  ログアウト
-                </button>
-              </div>
-            </>
+        <div className={styles.right}>
+          {userState.status === 'loading' ? (
+            <div className={styles.skeleton} />
+          ) : userState.status === 'signedIn' ? (
+            <div className={styles.userBox}>
+              <span className={styles.userEmail}>{userState.email ?? 'Signed in'}</span>
+              <button className={styles.buttonSecondary} onClick={onLogout}>
+                ログアウト
+              </button>
+            </div>
+          ) : (
+            <div className={styles.authBox}>
+              <Link className={styles.buttonSecondary} href={buildLoginUrl(safeNextPath)}>
+                ログイン
+              </Link>
+              <Link className={styles.buttonPrimary} href={buildSignupUrl(safeNextPath)}>
+                新規登録
+              </Link>
+            </div>
           )}
         </div>
       </div>
-    </div>
+    </header>
   );
 }
