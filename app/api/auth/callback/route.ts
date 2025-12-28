@@ -1,16 +1,17 @@
+// app/auth/callback/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '../../../lib/supabase/server';
 
 export async function GET(req: Request) {
-  const { searchParams, origin } = new URL(req.url);
-  const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
+  const url = new URL(req.url);
+  const code = url.searchParams.get('code');
+  const next = url.searchParams.get('next') ?? '/';
 
   if (code) {
-    // ✅ await を付けるのが正解
+    // ✅ createClient() が Promise を返すので await 必須
     const supabase = await createClient();
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(new URL(next, origin));
+  return NextResponse.redirect(new URL(next, url.origin));
 }
