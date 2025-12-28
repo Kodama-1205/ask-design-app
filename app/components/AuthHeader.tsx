@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '../../lib/supabase/client';
-import { buildLoginUrl, buildSignupUrl, getCurrentPathWithSearch } from '../../lib/askdesign/returnTo';
+import { buildLoginUrl, buildSignupUrl } from '../../lib/askdesign/returnTo';
 import styles from './AuthHeader.module.css';
 
 type UserState =
@@ -15,18 +15,25 @@ type UserState =
 export default function AuthHeader() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-
   const supabase = useMemo(() => createClient(), []);
 
   const [userState, setUserState] = useState<UserState>({ status: 'loading' });
+  const [nextPath, setNextPath] = useState<string>('/input');
 
-  const safeNextPath = useMemo(() => {
-    if (!pathname) return '/input';
-    if (pathname.startsWith('/auth')) return '/input';
-    // ✅ 引数必須：pathname と searchParams を渡す
-    return getCurrentPathWithSearch(pathname, searchParams);
-  }, [pathname, searchParams]);
+  // ✅ useSearchParams を使わず、クライアントで現在URLのクエリを拾う
+  useEffect(() => {
+    if (!pathname) {
+      setNextPath('/input');
+      return;
+    }
+    if (pathname.startsWith('/auth')) {
+      setNextPath('/input');
+      return;
+    }
+
+    const search = typeof window !== 'undefined' ? window.location.search : '';
+    setNextPath(search ? `${pathname}${search}` : pathname);
+  }, [pathname]);
 
   useEffect(() => {
     let mounted = true;
@@ -87,10 +94,10 @@ export default function AuthHeader() {
             </div>
           ) : (
             <div className={styles.authBox}>
-              <Link className={styles.buttonSecondary} href={buildLoginUrl(safeNextPath)}>
+              <Link className={styles.buttonSecondary} href={buildLoginUrl(nextPath)}>
                 ログイン
               </Link>
-              <Link className={styles.buttonPrimary} href={buildSignupUrl(safeNextPath)}>
+              <Link className={styles.buttonPrimary} href={buildSignupUrl(nextPath)}>
                 新規登録
               </Link>
             </div>
