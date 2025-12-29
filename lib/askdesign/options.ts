@@ -1,40 +1,64 @@
 // lib/askdesign/options.ts
+
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced';
 
-export const SKILL_LEVEL_OPTIONS: { value: SkillLevel; label: string }[] = [
+export const SKILL_LEVEL_OPTIONS: ReadonlyArray<{ value: SkillLevel; label: string }> = [
   { value: 'beginner', label: '初心者' },
-  { value: 'intermediate', label: '中級' },
-  { value: 'advanced', label: '上級' },
+  { value: 'intermediate', label: '中級者' },
+  { value: 'advanced', label: '上級者' },
 ];
 
-// ✅ ツールは減らさない（あなたが使ってきた6つを固定）
-export const TOOL_OPTIONS = ['ChatGPT', 'Gemini', 'Claude', 'Excel', 'Slack', 'Notion'] as const;
+// ✅ ここが /input のボタン一覧のソース
+export const TOOL_OPTIONS = [
+  'ChatGPT',
+  'Gemini',
+  'Claude',
+  'Dify',
+  'bolt.new',
+  'Excel',
+  'Slack',
+  'Notion',
+] as const;
 
-// 文字列 -> known/unknown に分解
-export function splitTools(toolsRaw: string): { known: string[]; unknown: string[] } {
-  const parts = (toolsRaw ?? '')
+const normalize = (s: string) => s.trim();
+
+export function splitTools(raw: string): { known: string[]; unknown: string[] } {
+  const tokens = (raw ?? '')
     .split(',')
-    .map((s) => s.trim())
+    .map(normalize)
     .filter(Boolean);
 
   const knownSet = new Set<string>(TOOL_OPTIONS as unknown as string[]);
+
   const known: string[] = [];
   const unknown: string[] = [];
 
-  for (const p of parts) {
-    if (knownSet.has(p)) known.push(p);
-    else unknown.push(p);
+  for (const t of tokens) {
+    if (knownSet.has(t)) known.push(t);
+    else unknown.push(t);
   }
 
   return { known, unknown };
 }
 
-// known + custom -> 文字列
 export function joinTools(known: string[], custom: string): string {
-  const a = (known ?? []).map((s) => s.trim()).filter(Boolean);
-  const b = (custom ?? '')
+  const customTokens = (custom ?? '')
     .split(',')
-    .map((s) => s.trim())
+    .map(normalize)
     .filter(Boolean);
-  return [...a, ...b].join(', ');
+
+  const merged = [...known, ...customTokens]
+    .map(normalize)
+    .filter(Boolean);
+
+  // 重複排除（順序維持）
+  const seen = new Set<string>();
+  const uniq: string[] = [];
+  for (const t of merged) {
+    if (seen.has(t)) continue;
+    seen.add(t);
+    uniq.push(t);
+  }
+
+  return uniq.join(', ');
 }

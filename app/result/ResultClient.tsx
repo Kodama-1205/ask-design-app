@@ -17,6 +17,7 @@ type ShareApiPayload = {
 const LS_KEYS = {
   prompt: 'askdesign:generated_prompt',
   explanation: 'askdesign:explanation',
+  inputs: 'askdesign:inputs',
 };
 
 export default function ResultClient() {
@@ -30,6 +31,11 @@ export default function ResultClient() {
   const [generatedPrompt, setGeneratedPrompt] = useState<string>('');
   const [explanation, setExplanation] = useState<string>('');
   const [title, setTitle] = useState<string>('生成結果');
+
+  // テンプレ保存UI
+  const [tplTitle, setTplTitle] = useState('');
+  const [savingTpl, setSavingTpl] = useState(false);
+  const [tplMsg, setTplMsg] = useState<string>('');
 
   const shareToken = searchParams.get('token') ?? '';
   const fromShare = Boolean(shareToken);
@@ -67,7 +73,7 @@ export default function ResultClient() {
           return;
         }
 
-        // ② ✅ id（DB）…スマホ/別端末でも同じ結果が出る
+        // ② ✅ id（DB）優先
         if (hasRunId) {
           const { data, error } = await supabase
             .from('prompt_runs')
@@ -96,7 +102,7 @@ export default function ResultClient() {
           return;
         }
 
-        // ④ localStorage fallback（PC内だけの結果）
+        // ④ localStorage fallback
         try {
           const p = localStorage.getItem(LS_KEYS.prompt) ?? '';
           const e = localStorage.getItem(LS_KEYS.explanation) ?? '';
@@ -128,11 +134,72 @@ export default function ResultClient() {
 
   const hasResult = Boolean(generatedPrompt.trim() || explanation.trim());
 
+  // ✅ テンプレ保存（templates テーブルへ）
+  const saveAsTemplate = async () => {
+    setTplMsg('');
+    if (!generatedPrompt.trim()) {
+      setTplMsg('生成プロンプトが空なので保存できません。');
+      return;
+    }
+    if (!tplTitle.trim()) {
+      setTplMsg('テンプレ名を入力してください。');
+      return;
+    }
+
+    setSavingTpl(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const user = userRes?.user;
+      if (!user) {
+        router.push('/auth/login');
+        return;
+      }
+
+      // 入力情報（あるなら）も一緒に保存
+      let inputs: any = null;
+      try {
+        const raw = localStorage.getItem(LS_KEYS.inputs);
+        inputs = raw ? JSON.parse(raw) : null;
+      } catch {
+        inputs = null;
+      }
+
+      // content は既存設計に合わせて「生成物」を入れる（あなたの templates 読み込みに支障なし）
+      const content = generatedPrompt;
+
+      const { error } = await supabase.from('templates').insert({
+        title: tplTitle.trim(),
+        content,
+        inputs: inputs ?? {},
+      });
+
+      if (error) throw error;
+
+      setTplMsg('テンプレとして保存しました。/templates で確認できます。');
+      setTplTitle('');
+    } catch (e: any) {
+      setTplMsg(e?.message ?? 'テンプレ保存に失敗しました。');
+    } finally {
+      setSavingTpl(false);
+    }
+  };
+
   return (
     <>
       <div className={styles.header}>
-        <h1 className={styles.title}>{title}</h1>
-        <p className={styles.subtitle}>生成されたプロンプトと説明を確認できます。</p>
+        <div>
+          <h1 className={styles.title}>{title}</h1>
+          <p className={styles.subtitle}>生成されたプロンプトと説明を確認できます。</p>
+        </div>
+
+        <div className={styles.headerActions}>
+          <button className={styles.buttonSecondary} onClick={() => router.push('/input')}>
+            入力へ
+          </button>
+          <button className={styles.buttonSecondary} onClick={() => router.push('/templates')}>
+            テンプレ
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -143,7 +210,7 @@ export default function ResultClient() {
         <div className={styles.card}>
           <p className={styles.errorText}>{error}</p>
           <div className={styles.actions}>
-            <button className={styles.button} onClick={() => router.push('/input')}>
+            <button className={styles.buttonSecondary} onClick={() => router.push('/input')}>
               入力画面へ戻る
             </button>
           </div>
@@ -152,7 +219,7 @@ export default function ResultClient() {
         <div className={styles.card}>
           <p className={styles.muted}>まだ生成結果がありません。/input で生成してください。</p>
           <div className={styles.actions}>
-            <button className={styles.button} onClick={() => router.push('/input')}>
+            <button className={styles.buttonSecondary} onClick={() => router.push('/input')}>
               入力画面へ戻る
             </button>
           </div>
@@ -164,7 +231,7 @@ export default function ResultClient() {
               <h2 className={styles.cardTitle}>生成プロンプト</h2>
               <div className={styles.actions}>
                 <button
-                  className={styles.button}
+                  className={styles.buttonPrimary}
                   onClick={() => copyToClipboard(generatedPrompt)}
                   disabled={!generatedPrompt}
                 >
@@ -178,7 +245,7 @@ export default function ResultClient() {
             </div>
 
             {explanation && (
-              <div className={styles.subSection}>
+              <div style={{ marginTop: 14 }}>
                 <h3 className={styles.subTitle}>説明</h3>
                 <div className={styles.contentBox}>
                   <MarkdownPreview content={explanation} />
@@ -189,6 +256,32 @@ export default function ResultClient() {
 
           <aside className={styles.side}>
             <div className={styles.card}>
+              <h3 className={styles.cardTitle}>テンプレに保存</h3>
+
+              <div className={styles.field}>
+                <div className={styles.label}>テンプレ名</div>
+                <input
+                  className={styles.input}
+                  value={tplTitle}
+                  onChange={(e) => setTplTitle(e.target.value)}
+                  placeholder="例：週次レポート自動化（Slack+Excel）"
+                  disabled={savingTpl}
+                />
+              </div>
+
+              <div className={styles.actions} style={{ marginTop: 10 }}>
+                <button className={styles.buttonPrimary} onClick={saveAsTemplate} disabled={savingTpl}>
+                  {savingTpl ? '保存中…' : '保存する'}
+                </button>
+                <button className={styles.buttonSecondary} onClick={() => router.push('/templates')}>
+                  テンプレ一覧へ
+                </button>
+              </div>
+
+              {tplMsg && <p className={tplMsg.includes('失敗') ? styles.errorText : styles.muted} style={{ marginTop: 10 }}>{tplMsg}</p>}
+            </div>
+
+            <div className={styles.card}>
               <h3 className={styles.cardTitle}>次にできること</h3>
               <ul className={styles.list}>
                 <li>そのままDifyやChatGPTに貼り付けて試す</li>
@@ -196,7 +289,7 @@ export default function ResultClient() {
                 <li>共有リンクを作ってチームに見せる</li>
               </ul>
 
-              <div className={styles.actions}>
+              <div className={styles.actions} style={{ marginTop: 10 }}>
                 <button className={styles.buttonSecondary} onClick={() => router.push('/input')}>
                   もう一度つくる
                 </button>
