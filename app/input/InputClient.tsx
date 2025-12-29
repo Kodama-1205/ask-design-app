@@ -1,4 +1,3 @@
-// app/input/InputClient.tsx（/input本体：useSearchParamsはここに隔離）
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -6,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
 import { createClient } from '../../lib/supabase/client';
 
-// ✅ 共通定義（日本語ラベル & ツール追加済み）
 import {
   SKILL_LEVEL_OPTIONS,
   TOOL_OPTIONS,
@@ -37,7 +35,7 @@ export default function InputClient() {
   const sp = useSearchParams();
   const templateId = sp.get('templateId');
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [goal, setGoal] = useState('');
   const [context, setContext] = useState('');
@@ -50,10 +48,8 @@ export default function InputClient() {
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [error, setError] = useState('');
 
-  // ✅ ⑲：キャンセル用
   const abortRef = useRef<AbortController | null>(null);
 
-  // ✅ ⑲：再試行用（最後のpayload）
   const lastPayloadRef = useRef<{
     goal: string;
     context: string;
@@ -61,7 +57,6 @@ export default function InputClient() {
     tools: string;
   } | null>(null);
 
-  // ✅ ⑳：オンボーディング
   const [onboardingOpen, setOnboardingOpen] = useState(false);
 
   const isBusy = loadingTemplate || loadingGenerate;
@@ -71,9 +66,7 @@ export default function InputClient() {
   }, [selectedTools, customTool]);
 
   const toggleTool = (tool: string) => {
-    setSelectedTools((prev) =>
-      prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]
-    );
+    setSelectedTools((prev) => (prev.includes(tool) ? prev.filter((t) => t !== tool) : [...prev, tool]));
   };
 
   const hydrateToolsFromString = (toolsRaw: string) => {
@@ -82,7 +75,6 @@ export default function InputClient() {
     setCustomTool(unknown.join(', '));
   };
 
-  // ✅ ⑳：初回だけオンボーディングを表示
   useEffect(() => {
     try {
       const done = localStorage.getItem(STORAGE.onboardingDone);
@@ -100,7 +92,7 @@ export default function InputClient() {
     }
   };
 
-  // ✅ テンプレ自動読み込み
+  // テンプレ自動読み込み
   useEffect(() => {
     const run = async () => {
       setError('');
@@ -160,12 +152,11 @@ export default function InputClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templateId]);
 
-  // ✅ ⑲：キャンセル
   const cancelGenerate = () => {
     abortRef.current?.abort();
   };
 
-  // ✅ 生成 → localStorage 保存 → /result（C：API正規化前提）
+  // ✅ 生成 → localStorage 保存 → ✅ DB保存 → /result?id=...
   const handleGenerate = async (payloadOverride?: {
     goal: string;
     context: string;
@@ -207,9 +198,7 @@ export default function InputClient() {
         | null;
 
       if (!res.ok) {
-        const msg = (data as any)?.error
-          ? String((data as any).error)
-          : `生成APIエラー: ${res.status}`;
+        const msg = (data as any)?.error ? String((data as any).error) : `生成APIエラー: ${res.status}`;
         throw new Error(msg);
       }
 
@@ -224,21 +213,51 @@ export default function InputClient() {
         throw new Error('生成結果が空です（Difyの出力を確認してください）');
       }
 
-      localStorage.setItem('askdesign:generated_prompt', generated_prompt);
-      localStorage.setItem('askdesign:explanation', explanation);
+      // (1) localStorage（同端末で即表示）
+      try {
+        localStorage.setItem('askdesign:generated_prompt', generated_prompt);
+        localStorage.setItem('askdesign:explanation', explanation);
 
-      localStorage.setItem(
-        'askdesign:inputs',
-        JSON.stringify({
-          goal: payload.goal,
-          context: payload.context,
-          skill_level: payload.skill_level,
-          tools: payload.tools,
-          loaded_template_id: templateId ?? null,
+        localStorage.setItem(
+          'askdesign:inputs',
+          JSON.stringify({
+            goal: payload.goal,
+            context: payload.context,
+            skill_level: payload.skill_level,
+            tools: payload.tools,
+            loaded_template_id: templateId ?? null,
+          })
+        );
+      } catch {
+        // ignore
+      }
+
+      // (2) ✅ DB保存（スマホ/別端末でも同じ結果）
+      const { data: userRes } = await supabase.auth.getUser();
+      const user = userRes?.user;
+      if (!user) {
+        router.push('/auth/login');
+        return;
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from('prompt_runs')
+        .insert({
+          user_id: user.id,
+          generated_prompt,
+          explanation,
         })
-      );
+        .select('id')
+        .single();
 
-      router.push('/result');
+      if (insertError || !inserted?.id) {
+        // DB保存できなくても、最低限 /result は表示（同端末）
+        router.push('/result');
+        return;
+      }
+
+      // (3) ✅ id付きで遷移（これが最終形）
+      router.push(`/result?id=${inserted.id}`);
     } catch (e: any) {
       if (e?.name === 'AbortError') {
         setError('生成をキャンセルしました（内容は保持されています）');
@@ -251,7 +270,6 @@ export default function InputClient() {
     }
   };
 
-  // ✅ ⑲：再試行
   const retry = () => {
     const last = lastPayloadRef.current;
     if (!last) return handleGenerate();
@@ -401,7 +419,6 @@ export default function InputClient() {
         )}
       </section>
 
-      {/* ✅ ⑳：オンボーディング */}
       <Modal
         open={onboardingOpen}
         title="Ask Design の使い方（1分）"
@@ -432,11 +449,7 @@ export default function InputClient() {
             title="スキルとツールを選ぶ"
             desc="初心者なら手順が丁寧に、上級なら実務向けに。ツール指定で指示が具体化します"
           />
-          <Step
-            no="4"
-            title="生成 → /result でコピー & テンプレ保存"
-            desc="/templates から /input に読み込めます"
-          />
+          <Step no="4" title="生成 → /result で確認" desc="スマホでも同じ結果が見られるように保存されます" />
           <div style={hintStyle}>※右上の「ガイド」からいつでも再表示できます</div>
         </div>
       </Modal>

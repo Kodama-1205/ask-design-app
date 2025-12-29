@@ -1,4 +1,3 @@
-// app/result/ResultClient.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -7,16 +6,12 @@ import styles from './page.module.css';
 import MarkdownPreview from './MarkdownPreview';
 import { createClient } from '../../lib/supabase/client';
 
-type ResultPayload = {
+type ShareApiPayload = {
   ok: boolean;
   generated_prompt?: string;
   explanation?: string;
   error?: { code?: string; message?: string };
-  share?: {
-    title?: string;
-    generated_prompt?: string;
-    explanation?: string;
-  };
+  share?: { title?: string; generated_prompt?: string; explanation?: string };
 };
 
 const LS_KEYS = {
@@ -27,7 +22,6 @@ const LS_KEYS = {
 export default function ResultClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const supabase = useMemo(() => createClient(), []);
 
   const [loading, setLoading] = useState(true);
@@ -49,7 +43,7 @@ export default function ResultClient() {
         setLoading(true);
         setError('');
 
-        // ① 共有（token）優先
+        // ① 共有（token）
         if (fromShare) {
           const res = await fetch('/api/share/get', {
             method: 'POST',
@@ -57,7 +51,7 @@ export default function ResultClient() {
             body: JSON.stringify({ token: shareToken }),
           });
 
-          const data = (await res.json()) as ResultPayload;
+          const data = (await res.json()) as ShareApiPayload;
 
           if (!data?.ok) {
             setError(data?.error?.message ?? '共有データの取得に失敗しました。');
@@ -66,22 +60,23 @@ export default function ResultClient() {
 
           const gp = data.share?.generated_prompt ?? data.generated_prompt ?? '';
           const ex = data.share?.explanation ?? data.explanation ?? '';
+
           setGeneratedPrompt(gp);
           setExplanation(ex);
           setTitle(data.share?.title ?? '共有結果');
           return;
         }
 
-        // ② id がある場合：DBから取得（スマホ対応）
+        // ② ✅ id（DB）…スマホ/別端末でも同じ結果が出る
         if (hasRunId) {
           const { data, error } = await supabase
             .from('prompt_runs')
-            .select('generated_prompt, explanation, created_at')
+            .select('generated_prompt, explanation')
             .eq('id', runId)
             .single();
 
           if (error || !data) {
-            setError('結果の取得に失敗しました（IDが存在しない / 権限なし / DBエラー）');
+            setError('結果の取得に失敗しました（IDが存在しない/権限なし/DBエラー）');
             return;
           }
 
@@ -91,7 +86,7 @@ export default function ResultClient() {
           return;
         }
 
-        // ③ URLクエリで渡された場合（互換）
+        // ③ URLクエリ互換
         const qp = searchParams.get('generated_prompt') ?? '';
         const qe = searchParams.get('explanation') ?? '';
         if (qp || qe) {
@@ -101,7 +96,7 @@ export default function ResultClient() {
           return;
         }
 
-        // ④ ✅ localStorage fallback（いまの /input の動きに対応）
+        // ④ localStorage fallback（PC内だけの結果）
         try {
           const p = localStorage.getItem(LS_KEYS.prompt) ?? '';
           const e = localStorage.getItem(LS_KEYS.explanation) ?? '';
