@@ -9,11 +9,19 @@ import { createClient } from '../../lib/supabase/client';
 
 type ResultPayload = {
   ok: boolean;
-  target?: string;
-  formatted_prompt?: string;
   generated_prompt?: string;
   explanation?: string;
   error?: { code?: string; message?: string };
+  share?: {
+    title?: string;
+    generated_prompt?: string;
+    explanation?: string;
+  };
+};
+
+const LS_KEYS = {
+  prompt: 'askdesign:generated_prompt',
+  explanation: 'askdesign:explanation',
 };
 
 export default function ResultClient() {
@@ -27,11 +35,13 @@ export default function ResultClient() {
 
   const [generatedPrompt, setGeneratedPrompt] = useState<string>('');
   const [explanation, setExplanation] = useState<string>('');
-
   const [title, setTitle] = useState<string>('生成結果');
 
   const shareToken = searchParams.get('token') ?? '';
   const fromShare = Boolean(shareToken);
+
+  const runId = searchParams.get('id') ?? '';
+  const hasRunId = Boolean(runId);
 
   useEffect(() => {
     const run = async () => {
@@ -39,6 +49,7 @@ export default function ResultClient() {
         setLoading(true);
         setError('');
 
+        // ① 共有（token）優先
         if (fromShare) {
           const res = await fetch('/api/share/get', {
             method: 'POST',
@@ -53,18 +64,51 @@ export default function ResultClient() {
             return;
           }
 
-          setGeneratedPrompt((data as any).share?.generated_prompt ?? data.generated_prompt ?? '');
-          setExplanation((data as any).share?.explanation ?? data.explanation ?? '');
-          setTitle((data as any).share?.title ?? '共有結果');
+          const gp = data.share?.generated_prompt ?? data.generated_prompt ?? '';
+          const ex = data.share?.explanation ?? data.explanation ?? '';
+          setGeneratedPrompt(gp);
+          setExplanation(ex);
+          setTitle(data.share?.title ?? '共有結果');
           return;
         }
 
-        const gp = searchParams.get('generated_prompt') ?? '';
-        const ex = searchParams.get('explanation') ?? '';
-        if (gp) setGeneratedPrompt(gp);
-        if (ex) setExplanation(ex);
+        // ② id がある場合：DBから取得（スマホ対応）
+        if (hasRunId) {
+          const { data, error } = await supabase
+            .from('prompt_runs')
+            .select('generated_prompt, explanation, created_at')
+            .eq('id', runId)
+            .single();
 
-        if (!gp && !ex) {
+          if (error || !data) {
+            setError('結果の取得に失敗しました（IDが存在しない / 権限なし / DBエラー）');
+            return;
+          }
+
+          setGeneratedPrompt(data.generated_prompt ?? '');
+          setExplanation(data.explanation ?? '');
+          setTitle('生成結果');
+          return;
+        }
+
+        // ③ URLクエリで渡された場合（互換）
+        const qp = searchParams.get('generated_prompt') ?? '';
+        const qe = searchParams.get('explanation') ?? '';
+        if (qp || qe) {
+          setGeneratedPrompt(qp);
+          setExplanation(qe);
+          setTitle('生成結果');
+          return;
+        }
+
+        // ④ ✅ localStorage fallback（いまの /input の動きに対応）
+        try {
+          const p = localStorage.getItem(LS_KEYS.prompt) ?? '';
+          const e = localStorage.getItem(LS_KEYS.explanation) ?? '';
+          setGeneratedPrompt(p);
+          setExplanation(e);
+          setTitle('生成結果');
+        } catch {
           setGeneratedPrompt('');
           setExplanation('');
         }
@@ -77,7 +121,7 @@ export default function ResultClient() {
     };
 
     run();
-  }, [fromShare, shareToken, searchParams, supabase]);
+  }, [fromShare, shareToken, hasRunId, runId, searchParams, supabase]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -86,6 +130,8 @@ export default function ResultClient() {
       // noop
     }
   };
+
+  const hasResult = Boolean(generatedPrompt.trim() || explanation.trim());
 
   return (
     <>
@@ -101,6 +147,15 @@ export default function ResultClient() {
       ) : error ? (
         <div className={styles.card}>
           <p className={styles.errorText}>{error}</p>
+          <div className={styles.actions}>
+            <button className={styles.button} onClick={() => router.push('/input')}>
+              入力画面へ戻る
+            </button>
+          </div>
+        </div>
+      ) : !hasResult ? (
+        <div className={styles.card}>
+          <p className={styles.muted}>まだ生成結果がありません。/input で生成してください。</p>
           <div className={styles.actions}>
             <button className={styles.button} onClick={() => router.push('/input')}>
               入力画面へ戻る
