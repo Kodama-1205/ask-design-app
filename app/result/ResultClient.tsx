@@ -124,14 +124,14 @@ export default function ResultClient() {
             </div>
 
             <div className={styles.contentBox}>
-              <MarkdownPreview markdown={generatedPrompt} />
+              <MarkdownPreview content={generatedPrompt} />
             </div>
 
             {explanation && (
               <div className={styles.subSection}>
                 <h3 className={styles.subTitle}>説明</h3>
                 <div className={styles.contentBox}>
-                  <MarkdownPreview markdown={explanation} />
+                  <MarkdownPreview content={explanation} />
                 </div>
               </div>
             )}
