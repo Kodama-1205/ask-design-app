@@ -1,61 +1,122 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import AuthHeader from '../components/AuthHeader';
+import styles from './page.module.css';
+import { createClient } from '../../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const supabase = useMemo(() => createClient(), []);
 
-  async function onLogin(e: React.FormEvent) {
+  const returnTo = searchParams.get('returnTo') || '/';
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // すでにログイン済みなら returnTo へ
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!mounted) return;
+      if (data?.user) router.replace(returnTo);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [router, returnTo, supabase]);
+
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null);
-    setBusy(true);
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.message || "ログイン失敗");
-      router.push("/");
-      router.refresh();
-    } catch (e: any) {
-      setErr(e?.message || "ログイン失敗");
-    } finally {
-      setBusy(false);
+    if (submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      setError(signInError.message);
+      setSubmitting(false);
+      return;
     }
-  }
+
+    router.replace(returnTo);
+  };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
-      <div className="mx-auto max-w-md px-6 py-14">
-        <div className="rounded-3xl border border-emerald-100 bg-white p-7 shadow-sm">
-          <p className="text-sm font-semibold text-emerald-700">Ask Design</p>
-          <h1 className="mt-1 text-2xl font-bold">ログイン</h1>
+    <div className={styles.page}>
+      <AuthHeader />
 
-          {err && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{err}</div>}
+      <main className={styles.main}>
+        <div className={styles.card}>
+          <div className={styles.head}>
+            <h1 className={styles.title}>ログイン</h1>
+            <p className={styles.subtitle}>続行するにはログインしてください</p>
+          </div>
 
-          <form onSubmit={onLogin} className="mt-6 space-y-4">
-            <input className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm" placeholder="email"
-              value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input className="w-full rounded-2xl border border-neutral-200 px-4 py-3 text-sm" placeholder="password(6+)" type="password"
-              value={password} onChange={(e) => setPassword(e.target.value)} />
+          <form className={styles.form} onSubmit={onSubmit}>
+            <label className={styles.label}>
+              <span className={styles.labelText}>メールアドレス</span>
+              <input
+                className={styles.input}
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+              />
+            </label>
 
-            <button disabled={busy} className="w-full rounded-2xl bg-emerald-600 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-              {busy ? "処理中..." : "ログイン"}
+            <label className={styles.label}>
+              <span className={styles.labelText}>パスワード</span>
+              <input
+                className={styles.input}
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </label>
+
+            {error ? <div className={styles.error}>{error}</div> : null}
+
+            <button className={styles.primaryBtn} type="submit" disabled={submitting}>
+              {submitting ? 'ログイン中…' : 'ログイン'}
             </button>
 
-            <a className="block text-center text-sm text-emerald-700 hover:underline" href="/register">
-              新規登録はこちら
-            </a>
+            <div className={styles.metaRow}>
+              <div className={styles.metaLeft}>
+                <span className={styles.metaText}>アカウントをお持ちでない場合：</span>
+                <Link className={styles.link} href={`/signup?returnTo=${encodeURIComponent(returnTo)}`}>
+                  新規登録
+                </Link>
+              </div>
+
+              <Link className={styles.linkMuted} href="/">
+                TOPへ戻る
+              </Link>
+            </div>
           </form>
         </div>
-      </div>
-    </main>
+      </main>
+
+      <footer className={styles.footer}>
+        <span className={styles.footerText}>Ask Design</span>
+      </footer>
+    </div>
   );
 }
