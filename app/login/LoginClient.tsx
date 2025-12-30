@@ -6,6 +6,14 @@ import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 import { createClient } from '../../lib/supabase/client';
 
+function safeReturnTo(raw: string | null) {
+  // 変な値や /login ループを避ける（見た目は変えず安全に）
+  if (!raw) return '/';
+  if (raw.startsWith('/login') || raw.startsWith('/signup')) return '/';
+  if (!raw.startsWith('/')) return '/';
+  return raw;
+}
+
 export default function LoginClient() {
   const router = useRouter();
 
@@ -19,23 +27,24 @@ export default function LoginClient() {
   // returnTo はブラウザでだけ取得（ビルド時prerenderで落ちない）
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
-    const rt = sp.get('returnTo');
-    if (rt) setReturnTo(rt);
+    setReturnTo(safeReturnTo(sp.get('returnTo')));
   }, []);
 
-  // すでにログイン済みなら returnTo へ
+  // すでにログイン済みなら returnTo へ（ここも full reload で確実に）
   useEffect(() => {
     let mounted = true;
     (async () => {
       const supabase = createClient();
       const { data } = await supabase.auth.getUser();
       if (!mounted) return;
-      if (data?.user) router.replace(returnTo);
+      if (data?.user) {
+        window.location.assign(returnTo);
+      }
     })();
     return () => {
       mounted = false;
     };
-  }, [router, returnTo]);
+  }, [returnTo]);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,19 +53,45 @@ export default function LoginClient() {
     setSubmitting(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInError) {
-      setError(signInError.message);
+    // 10秒経っても進まない場合は解除（無限「ログイン中…」防止）
+    const watchdog = window.setTimeout(() => {
       setSubmitting(false);
-      return;
-    }
+      setError('ログイン処理が完了しませんでした。通信状況をご確認のうえ、もう一度お試しください。');
+    }, 10000);
 
-    router.replace(returnTo);
+    try {
+      const supabase = createClient();
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        window.clearTimeout(watchdog);
+        setError(signInError.message);
+        setSubmitting(false);
+        return;
+      }
+
+      // セッションが取れるまで一瞬待つ（cookie反映の取りこぼし防止）
+      // 取れなければそれでも次へ進む（full reloadで最終的に整合）
+      try {
+        await supabase.auth.getSession();
+      } catch {
+        // noop
+      }
+
+      window.clearTimeout(watchdog);
+
+      // ★ここがポイント：router.replace ではなく full reload
+      // → proxy.ts 側に cookie が確実に届くので、ログイン判定が安定する
+      window.location.assign(returnTo);
+    } catch (err: any) {
+      window.clearTimeout(watchdog);
+      setError(err?.message ?? 'ログインに失敗しました。もう一度お試しください。');
+      setSubmitting(false);
+    }
   };
 
   return (
