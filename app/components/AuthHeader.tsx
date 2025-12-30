@@ -1,106 +1,84 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '../../lib/supabase/client';
-import { buildLoginUrl, buildSignupUrl } from '../../lib/askdesign/returnTo';
 import styles from './AuthHeader.module.css';
-
-type UserState =
-  | { status: 'loading' }
-  | { status: 'signedOut' }
-  | { status: 'signedIn'; email?: string | null };
 
 export default function AuthHeader() {
   const router = useRouter();
   const pathname = usePathname();
   const supabase = useMemo(() => createClient(), []);
 
-  const [userState, setUserState] = useState<UserState>({ status: 'loading' });
-  const [nextPath, setNextPath] = useState<string>('/input');
-
-  // ✅ useSearchParams を使わず、クライアントで現在URLのクエリを拾う
-  useEffect(() => {
-    if (!pathname) {
-      setNextPath('/input');
-      return;
-    }
-    if (pathname.startsWith('/auth')) {
-      setNextPath('/input');
-      return;
-    }
-
-    const search = typeof window !== 'undefined' ? window.location.search : '';
-    setNextPath(search ? `${pathname}${search}` : pathname);
-  }, [pathname]);
+  const [email, setEmail] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     let mounted = true;
 
-    const run = async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        if (!mounted) return;
-
-        const user = data?.user;
-        if (!user) {
-          setUserState({ status: 'signedOut' });
-          return;
-        }
-        setUserState({ status: 'signedIn', email: user.email });
-      } catch {
-        if (!mounted) return;
-        setUserState({ status: 'signedOut' });
-      }
+    const load = async () => {
+      setLoading(true);
+      const { data } = await supabase.auth.getUser();
+      if (!mounted) return;
+      setEmail(data?.user?.email ?? null);
+      setLoading(false);
     };
 
-    run();
+    load();
 
+    // 画面遷移/復帰でも同期が取れるように（軽量）
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
-      run();
+      load();
     });
 
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      sub?.subscription?.unsubscribe();
     };
   }, [supabase]);
 
   const onLogout = async () => {
-    await supabase.auth.signOut();
-    router.refresh();
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setLoggingOut(false);
+      // 見た目は変えず、状態だけ最新化
+      router.refresh();
+      // もし保護ページに居たらTOPへ（不自然な表示を避ける）
+      if (pathname.startsWith('/input') || pathname.startsWith('/result') || pathname.startsWith('/templates') || pathname.startsWith('/template')) {
+        router.replace('/');
+      }
+    }
   };
 
   return (
     <header className={styles.header}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.brand}>
-          <span className={styles.brandMark} aria-hidden>
-            ✨
-          </span>
-          <span className={styles.brandText}>Ask Design</span>
+        <Link className={styles.brand} href="/">
+          Ask Design
         </Link>
 
         <div className={styles.right}>
-          {userState.status === 'loading' ? (
-            <div className={styles.skeleton} />
-          ) : userState.status === 'signedIn' ? (
-            <div className={styles.userBox}>
-              <span className={styles.userEmail}>{userState.email ?? 'Signed in'}</span>
-              <button className={styles.buttonSecondary} onClick={onLogout}>
-                ログアウト
+          {!loading && email ? (
+            <div className={styles.userPill} aria-label="signed-in-user">
+              <span className={styles.userEmail} title={email}>
+                {email}
+              </span>
+              <button
+                type="button"
+                className={styles.logoutBtn}
+                onClick={onLogout}
+                disabled={loggingOut}
+              >
+                {loggingOut ? 'ログアウト中…' : 'ログアウト'}
               </button>
             </div>
           ) : (
-            <div className={styles.authBox}>
-              <Link className={styles.buttonSecondary} href={buildLoginUrl(nextPath)}>
-                ログイン
-              </Link>
-              <Link className={styles.buttonPrimary} href={buildSignupUrl(nextPath)}>
-                新規登録
-              </Link>
-            </div>
+            <div className={styles.rightSpacer} />
           )}
         </div>
       </div>
