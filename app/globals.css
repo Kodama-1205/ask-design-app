@@ -1,3 +1,59 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===== Mobile overflow fixes (append) ===== */
+html,
+body {
+  width: 100%;
+  overflow-x: hidden; /* 右切れ・横スクロールの元を止める */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* 画像/動画などが横にはみ出さない */
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 入力系が固定幅で溢れるのを防ぐ */
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
+}
+
+/* 生成結果（Markdown/コード）が横に伸びて切れるのを防ぐ */
+pre,
+code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* flexの子要素が横に伸びて切れる典型対策 */
+main,
+section,
+article,
+div {
+  min-width: 0;
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+pre,
+code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
