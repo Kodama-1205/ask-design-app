@@ -26,7 +26,6 @@ function unauthorized() {
 }
 
 function decodeBasic(base64: string) {
-  // EdgeでもNodeでも動くように
   try {
     if (typeof atob === "function") return atob(base64);
   } catch {}
@@ -42,8 +41,7 @@ function checkBasicAuth(req: NextRequest) {
   const user = process.env.BASIC_AUTH_USER ?? "";
   const pass = process.env.BASIC_AUTH_PASS ?? "";
 
-  // 環境変数が未設定なら「Basic認証しない」（開発時に邪魔しない）
-  // ※本番で必ず掛けたいなら、Vercel側で必ず2つを設定してください
+  // 未設定なら認証しない（本番はVercelに必ず設定）
   if (!user || !pass) return { ok: true as const };
 
   const auth = req.headers.get("authorization");
@@ -57,13 +55,36 @@ function checkBasicAuth(req: NextRequest) {
   return { ok: false as const };
 }
 
+/** アセット系はBasic認証をかけない（CSS/JSが読めずUIが崩れるのを防ぐ） */
+function isPublicAssetPath(pathname: string) {
+  if (
+    pathname.startsWith("/_next/static") ||
+    pathname.startsWith("/_next/image") ||
+    pathname.startsWith("/favicon.ico") ||
+    pathname.startsWith("/robots.txt") ||
+    pathname.startsWith("/sitemap.xml")
+  ) {
+    return true;
+  }
+
+  // 拡張子での除外（念のため）
+  return /\.(?:css|js|map|ico|svg|png|jpg|jpeg|gif|webp|woff|woff2|ttf|eot)$/.test(pathname);
+}
+
 // Next.js 16: middleware.ts の代わりに proxy.ts / proxy() を使う
 export async function proxy(req: NextRequest) {
-  // ① まず Basic認証（ここで止める）
+  const pathname = req.nextUrl.pathname;
+
+  // ① 先にアセットを素通り（ここが今回の“見た目崩れ”対策の本体）
+  if (isPublicAssetPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // ② Basic認証（ページ/API本体だけ守る）
   const basic = checkBasicAuth(req);
   if (!basic.ok) return unauthorized();
 
-  // ② 以降は既存のSupabase認証（あなたの現状ロジックを維持）
+  // ③ 以降は既存のSupabase認証（あなたの現状ロジックを維持）
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -92,8 +113,6 @@ export async function proxy(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = req.nextUrl.pathname;
-
   // 例外：ログイン/サインアップは保護しない（無限ループ防止）
   if (pathname.startsWith("/login") || pathname.startsWith("/signup")) {
     return res;
@@ -102,10 +121,7 @@ export async function proxy(req: NextRequest) {
   // 未ログインで /input 等に来たらログインへ
   if (!user && isProtectedPath(pathname)) {
     const loginUrl = req.nextUrl.clone();
-
-    // ★ログインページが /login ではない場合は、ここだけ実パスに変更
     loginUrl.pathname = "/login";
-
     loginUrl.searchParams.set("returnTo", buildReturnTo(req));
 
     const redirectRes = NextResponse.redirect(loginUrl);
