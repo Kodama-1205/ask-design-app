@@ -52,11 +52,6 @@ function getClientIp(req: Request) {
   return "unknown";
 }
 
-/** DEMOモード：普段は課金0で固定出力 */
-function isDemoMode() {
-  return (process.env.DEMO_MODE ?? "").toLowerCase() === "true";
-}
-
 /**
  * 合言葉トークン（ポートフォリオ用）
  * - 本番（Vercel）では必須にするのが安全
@@ -158,26 +153,13 @@ export async function POST(req: Request) {
   try {
     const ip = getClientIp(req);
 
-    // ① DEMOモード（普段は課金0）
-    if (isDemoMode()) {
-      return NextResponse.json(
-        {
-          generated_prompt:
-            "【デモ】要件を整理し、最小ルートで動く形に落とし込むための質問テンプレートを生成しました。",
-          explanation:
-            "これはデモモードの固定出力です。見せたい時だけ DEMO_MODE=false にして本番呼び出しに切り替えてください。",
-        },
-        { status: 200 }
-      );
-    }
-
-    // ② 合言葉トークン（本番で必須）
+    // ① 合言葉トークン（本番で必須）
     const tokenCheck = requirePortfolioToken(req);
     if (!tokenCheck.ok) {
       return NextResponse.json({ error: tokenCheck.error }, { status: tokenCheck.status });
     }
 
-    // ③ レート制限（連打対策）
+    // ② レート制限（連打対策）
     const rl = rateLimit(ip, 5, 60_000); // 1分5回（必要なら調整）
     if (!rl.ok) {
       return NextResponse.json(
@@ -209,7 +191,7 @@ export async function POST(req: Request) {
       ),
     };
 
-    // ④ 入力サイズ制限（高額化＆DoS対策）
+    // ③ 入力サイズ制限（高額化＆DoS対策）
     const limitCheck = enforceInputLimits(inputs);
     if (!limitCheck.ok) {
       return NextResponse.json({ error: limitCheck.error }, { status: limitCheck.status });
