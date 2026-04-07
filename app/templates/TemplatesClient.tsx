@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
 import { createClient } from '../../lib/supabase/client';
 
@@ -31,14 +31,12 @@ type TemplateRow = {
 
 type ToastKind = 'success' | 'error' | 'info';
 type SortKey = 'newest' | 'oldest' | 'title';
-type DangerAction = 'archive' | 'unarchive' | 'delete';
 
 /* ======================
    ページ本体（Client）
 ====================== */
 export default function TemplatesClient() {
   const router = useRouter();
-  const sp = useSearchParams(); // ✅ useSearchParams は Client に隔離
   const supabase = createClient();
 
   const [items, setItems] = useState<TemplateRow[]>([]);
@@ -48,7 +46,6 @@ export default function TemplatesClient() {
   const [q, setQ] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [toolFilter, setToolFilter] = useState<string | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
 
   /* ---------- Toast ---------- */
   const [toast, setToast] = useState<{ open: boolean; kind: ToastKind; message: string }>({
@@ -86,7 +83,8 @@ export default function TemplatesClient() {
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes?.user;
     if (!user) {
-      router.push('/auth/login');
+      setItems([]);
+      setLoading(false);
       return;
     }
 
@@ -111,7 +109,7 @@ export default function TemplatesClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ---------- ⑯ 条件コピー（NEW） ---------- */
+  /* ---------- 条件コピー ---------- */
   const copyConditions = async (tpl: TemplateRow) => {
     const inputs = (tpl.inputs ?? {}) as { skill_level?: SkillLevel | string; tools?: string };
 
@@ -144,7 +142,7 @@ export default function TemplatesClient() {
     const query = q.trim().toLowerCase();
 
     const list = items.filter((tpl) => {
-      if (Boolean(tpl.archived) !== showArchived) return false;
+      if (tpl.archived) return false;
 
       const inputs = (tpl.inputs ?? {}) as { tools?: string };
       const toolsRaw = inputs.tools ?? '';
@@ -170,10 +168,10 @@ export default function TemplatesClient() {
       normal: list.filter((x) => !x.pinned).sort(cmp),
       total: list.length,
     };
-  }, [items, q, sortKey, toolFilter, showArchived]);
+  }, [items, q, sortKey, toolFilter]);
 
   /* ======================
-     Render（あなたの見た目を維持）
+     Render
 ====================== */
   return (
     <>
@@ -198,9 +196,13 @@ export default function TemplatesClient() {
           <div className={styles.muted}>読み込み中...</div>
         ) : error ? (
           <div className={styles.error}>{error}</div>
+        ) : items.length === 0 ? (
+          <div className={styles.muted}>
+            保存済みテンプレはありません。/result で生成後に保存できます。
+          </div>
         ) : (
           <div className={styles.grid}>
-            {filtered.normal.map((tpl) => (
+            {[...filtered.pinned, ...filtered.normal].map((tpl) => (
               <div key={tpl.id} className={styles.item}>
                 <div className={styles.itemHeader}>
                   <div className={styles.itemTitle}>{tpl.title}</div>
@@ -231,6 +233,40 @@ export default function TemplatesClient() {
         )}
       </section>
 
+      {viewOpen && viewTpl && (
+        <div style={modal.overlay} role="dialog" aria-modal="true">
+          <div style={modal.card}>
+            <div style={modal.header}>
+              <div style={modal.title}>{viewTpl.title}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  style={viewMode === 'preview' ? modal.tabActive : modal.tab}
+                  onClick={() => setViewMode('preview')}
+                >
+                  Preview
+                </button>
+                <button
+                  style={viewMode === 'raw' ? modal.tabActive : modal.tab}
+                  onClick={() => setViewMode('raw')}
+                >
+                  Raw
+                </button>
+                <button onClick={closeView} style={modal.xBtn} aria-label="閉じる">
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div style={modal.body}>
+              {viewMode === 'preview' ? (
+                <MarkdownPreview content={viewTpl.content} />
+              ) : (
+                <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>{viewTpl.content}</pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast.open && (
         <div style={{ position: 'fixed', bottom: 16, left: 0, right: 0, textAlign: 'center' }}>
           <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 12 }}>
@@ -241,3 +277,63 @@ export default function TemplatesClient() {
     </>
   );
 }
+
+const modal: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.45)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1200,
+    padding: 16,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 640,
+    background: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    boxShadow: '0 20px 60px rgba(0,0,0,0.20)',
+    maxHeight: '80vh',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 12,
+  },
+  title: { fontSize: 15, fontWeight: 900, color: '#0f172a' },
+  body: { overflowY: 'auto', flex: 1 },
+  xBtn: {
+    border: '1px solid #e2e8f0',
+    background: '#fff',
+    borderRadius: 12,
+    padding: '6px 10px',
+    cursor: 'pointer',
+    fontWeight: 900,
+  },
+  tab: {
+    border: '1px solid #e2e8f0',
+    background: '#fff',
+    borderRadius: 10,
+    padding: '5px 10px',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  tabActive: {
+    border: '1px solid #16a34a',
+    background: 'rgba(34,197,94,.1)',
+    borderRadius: 10,
+    padding: '5px 10px',
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#065f46',
+  },
+};

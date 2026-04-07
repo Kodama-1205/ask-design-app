@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
-import { createClient } from '../../lib/supabase/client';
 
 import {
   SKILL_LEVEL_OPTIONS,
@@ -34,8 +33,6 @@ export default function InputClient() {
   const router = useRouter();
   const sp = useSearchParams();
   const templateId = sp.get('templateId');
-
-  const supabase = useMemo(() => createClient(), []);
 
   const [goal, setGoal] = useState('');
   const [context, setContext] = useState('');
@@ -100,12 +97,8 @@ export default function InputClient() {
 
       setLoadingTemplate(true);
 
-      const { data: userRes } = await supabase.auth.getUser();
-      if (!userRes?.user) {
-        setLoadingTemplate(false);
-        router.push('/auth/login');
-        return;
-      }
+      const { createClient } = await import('../../lib/supabase/client');
+      const supabase = createClient();
 
       const { data, error } = await supabase
         .from('templates')
@@ -232,32 +225,7 @@ export default function InputClient() {
         // ignore
       }
 
-      // (2) ✅ DB保存（スマホ/別端末でも同じ結果）
-      const { data: userRes } = await supabase.auth.getUser();
-      const user = userRes?.user;
-      if (!user) {
-        router.push('/auth/login');
-        return;
-      }
-
-      const { data: inserted, error: insertError } = await supabase
-        .from('prompt_runs')
-        .insert({
-          user_id: user.id,
-          generated_prompt,
-          explanation,
-        })
-        .select('id')
-        .single();
-
-      if (insertError || !inserted?.id) {
-        // DB保存できなくても、最低限 /result は表示（同端末）
-        router.push('/result');
-        return;
-      }
-
-      // (3) ✅ id付きで遷移（これが最終形）
-      router.push(`/result?id=${inserted.id}`);
+      router.push('/result');
     } catch (e: any) {
       if (e?.name === 'AbortError') {
         setError('生成をキャンセルしました（内容は保持されています）');
@@ -299,6 +267,9 @@ export default function InputClient() {
           </button>
           <button className={styles.btnGhost} type="button" onClick={() => router.push('/templates')}>
             /templates
+          </button>
+          <button className={styles.btnGhost} type="button" onClick={() => router.push('/history')}>
+            /history
           </button>
           <button className={styles.btnGhost} type="button" onClick={() => router.push('/result')}>
             /result

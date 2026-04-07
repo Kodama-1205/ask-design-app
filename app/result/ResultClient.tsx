@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './page.module.css';
 import MarkdownPreview from './MarkdownPreview';
-import { createClient } from '../../lib/supabase/client';
+import { saveResult } from '../../lib/history';
 
 type ShareApiPayload = {
   ok: boolean;
@@ -23,25 +23,20 @@ const LS_KEYS = {
 export default function ResultClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = useMemo(() => createClient(), []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
   const [generatedPrompt, setGeneratedPrompt] = useState<string>('');
   const [explanation, setExplanation] = useState<string>('');
+  const [inputs, setInputs] = useState<Record<string, any>>({});
   const [title, setTitle] = useState<string>('生成結果');
 
-  // テンプレ保存UI
-  const [tplTitle, setTplTitle] = useState('');
-  const [savingTpl, setSavingTpl] = useState(false);
-  const [tplMsg, setTplMsg] = useState<string>('');
+  const [saveMsg, setSaveMsg] = useState<string>('');
+  const [saved, setSaved] = useState(false);
 
   const shareToken = searchParams.get('token') ?? '';
   const fromShare = Boolean(shareToken);
-
-  const runId = searchParams.get('id') ?? '';
-  const hasRunId = Boolean(runId);
 
   useEffect(() => {
     const run = async () => {
@@ -73,26 +68,7 @@ export default function ResultClient() {
           return;
         }
 
-        // ② ✅ id（DB）優先
-        if (hasRunId) {
-          const { data, error } = await supabase
-            .from('prompt_runs')
-            .select('generated_prompt, explanation')
-            .eq('id', runId)
-            .single();
-
-          if (error || !data) {
-            setError('結果の取得に失敗しました（IDが存在しない/権限なし/DBエラー）');
-            return;
-          }
-
-          setGeneratedPrompt(data.generated_prompt ?? '');
-          setExplanation(data.explanation ?? '');
-          setTitle('生成結果');
-          return;
-        }
-
-        // ③ URLクエリ互換
+        // ② URLクエリ互換
         const qp = searchParams.get('generated_prompt') ?? '';
         const qe = searchParams.get('explanation') ?? '';
         if (qp || qe) {
@@ -102,12 +78,15 @@ export default function ResultClient() {
           return;
         }
 
-        // ④ localStorage fallback
+        // ③ localStorage fallback
         try {
           const p = localStorage.getItem(LS_KEYS.prompt) ?? '';
           const e = localStorage.getItem(LS_KEYS.explanation) ?? '';
+          const raw = localStorage.getItem(LS_KEYS.inputs);
+          const inp = raw ? JSON.parse(raw) : {};
           setGeneratedPrompt(p);
           setExplanation(e);
+          setInputs(inp);
           setTitle('生成結果');
         } catch {
           setGeneratedPrompt('');
@@ -122,7 +101,7 @@ export default function ResultClient() {
     };
 
     run();
-  }, [fromShare, shareToken, hasRunId, runId, searchParams, supabase]);
+  }, [fromShare, shareToken, searchParams]);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -132,57 +111,14 @@ export default function ResultClient() {
     }
   };
 
-  const hasResult = Boolean(generatedPrompt.trim() || explanation.trim());
-
-  // ✅ テンプレ保存（templates テーブルへ）
-  const saveAsTemplate = async () => {
-    setTplMsg('');
-    if (!generatedPrompt.trim()) {
-      setTplMsg('生成プロンプトが空なので保存できません。');
-      return;
-    }
-    if (!tplTitle.trim()) {
-      setTplMsg('テンプレ名を入力してください。');
-      return;
-    }
-
-    setSavingTpl(true);
-    try {
-      const { data: userRes } = await supabase.auth.getUser();
-      const user = userRes?.user;
-      if (!user) {
-        router.push('/auth/login');
-        return;
-      }
-
-      // 入力情報（あるなら）も一緒に保存
-      let inputs: any = null;
-      try {
-        const raw = localStorage.getItem(LS_KEYS.inputs);
-        inputs = raw ? JSON.parse(raw) : null;
-      } catch {
-        inputs = null;
-      }
-
-      // content は既存設計に合わせて「生成物」を入れる（あなたの templates 読み込みに支障なし）
-      const content = generatedPrompt;
-
-      const { error } = await supabase.from('templates').insert({
-        title: tplTitle.trim(),
-        content,
-        inputs: inputs ?? {},
-      });
-
-      if (error) throw error;
-
-      setTplMsg('テンプレとして保存しました。/templates で確認できます。');
-      setTplTitle('');
-    } catch (e: any) {
-      setTplMsg(e?.message ?? 'テンプレ保存に失敗しました。');
-    } finally {
-      setSavingTpl(false);
-    }
+  const handleSave = () => {
+    if (!generatedPrompt.trim()) return;
+    saveResult({ generated_prompt: generatedPrompt, explanation, inputs });
+    setSaved(true);
+    setSaveMsg('保存しました。/history で確認できます。');
   };
+
+  const hasResult = Boolean(generatedPrompt.trim() || explanation.trim());
 
   return (
     <>
@@ -196,8 +132,8 @@ export default function ResultClient() {
           <button className={styles.buttonSecondary} onClick={() => router.push('/input')}>
             入力へ
           </button>
-          <button className={styles.buttonSecondary} onClick={() => router.push('/templates')}>
-            テンプレ
+          <button className={styles.buttonSecondary} onClick={() => router.push('/history')}>
+            /history
           </button>
         </div>
       </div>
@@ -256,29 +192,29 @@ export default function ResultClient() {
 
           <aside className={styles.side}>
             <div className={styles.card}>
-              <h3 className={styles.cardTitle}>テンプレに保存</h3>
+              <h3 className={styles.cardTitle}>この結果を保存</h3>
+              <p className={styles.muted} style={{ marginTop: 8, fontSize: 13 }}>
+                /history にいつでも戻れるよう保存できます。
+              </p>
 
-              <div className={styles.field}>
-                <div className={styles.label}>テンプレ名</div>
-                <input
-                  className={styles.input}
-                  value={tplTitle}
-                  onChange={(e) => setTplTitle(e.target.value)}
-                  placeholder="例：週次レポート自動化（Slack+Excel）"
-                  disabled={savingTpl}
-                />
-              </div>
-
-              <div className={styles.actions} style={{ marginTop: 10 }}>
-                <button className={styles.buttonPrimary} onClick={saveAsTemplate} disabled={savingTpl}>
-                  {savingTpl ? '保存中…' : '保存する'}
+              <div className={styles.actions} style={{ marginTop: 12 }}>
+                <button
+                  className={styles.buttonPrimary}
+                  onClick={handleSave}
+                  disabled={saved || !generatedPrompt.trim()}
+                >
+                  {saved ? '保存済み' : '保存する'}
                 </button>
-                <button className={styles.buttonSecondary} onClick={() => router.push('/templates')}>
-                  テンプレ一覧へ
+                <button className={styles.buttonSecondary} onClick={() => router.push('/history')}>
+                  履歴を見る
                 </button>
               </div>
 
-              {tplMsg && <p className={tplMsg.includes('失敗') ? styles.errorText : styles.muted} style={{ marginTop: 10 }}>{tplMsg}</p>}
+              {saveMsg && (
+                <p className={styles.muted} style={{ marginTop: 10, fontSize: 13 }}>
+                  {saveMsg}
+                </p>
+              )}
             </div>
 
             <div className={styles.card}>

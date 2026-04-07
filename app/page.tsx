@@ -1,57 +1,8 @@
 // app/page.tsx
-'use client';
-
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import styles from './page.module.css';
-import { createClient } from '../lib/supabase/client';
 
 export default function HomePage() {
-  const router = useRouter();
-  const supabase = createClient();
-
-  const [checking, setChecking] = useState(true);
-
-  useEffect(() => {
-    const run = async () => {
-      try {
-        const { data } = await supabase.auth.getUser();
-        if (data?.user) {
-          router.replace('/input');
-          return;
-        }
-      } catch {
-        // ignore（未ログイン扱いでLP表示）
-      } finally {
-        setChecking(false);
-      }
-    };
-    run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ✅ ログイン判定中はLPを表示せず、軽量ローディング
-  if (checking) {
-    return (
-      <main className={styles.page}>
-        <div className={styles.container}>
-          <header className={styles.header}>
-            <div>
-              <h1 className={styles.title}>Ask Design</h1>
-              <p className={styles.sub}>Prompt Generator</p>
-            </div>
-          </header>
-
-          <section className={styles.card}>
-            <div className={styles.banner}>読み込み中…</div>
-          </section>
-        </div>
-      </main>
-    );
-  }
-
-  // ✅ 未ログイン：LP表示
   return (
     <main className={styles.page}>
       <div className={styles.container}>
@@ -62,11 +13,11 @@ export default function HomePage() {
           </div>
 
           <div className={styles.headerActions}>
-            <Link className={styles.btnGhost} href="/auth/login">
-              ログイン
+            <Link className={styles.btnGhost} href="/input">
+              /input
             </Link>
-            <Link className={styles.btnPrimary} href="/auth/signup">
-              新規登録
+            <Link className={styles.btnPrimary} href="/templates">
+              /templates
             </Link>
           </div>
         </header>
@@ -93,10 +44,6 @@ export default function HomePage() {
                 <Link className={styles.btnGhost} href="/templates">
                   テンプレを見る（/templates）
                 </Link>
-              </div>
-
-              <div className={styles.note}>
-                ※ ログインしている場合は、そのまま /input へ進めます（未ログインならログインへ誘導されます）
               </div>
             </div>
 
@@ -164,6 +111,9 @@ Excelで集計した数値をSlackへ共有する週次運用を自動化した�
             </Link>
             <Link className={styles.footerLink} href="/templates">
               /templates
+            </Link>
+            <Link className={styles.footerLink} href="/history">
+              /history
             </Link>
             <Link className={styles.footerLink} href="/result">
               /result
