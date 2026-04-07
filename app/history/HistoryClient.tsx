@@ -79,10 +79,10 @@ export default function HistoryClient() {
 
         <div className={styles.headerActions}>
           <button className={styles.btnGhost} onClick={() => router.push('/input')}>
-            /input
+            入力
           </button>
           <button className={styles.btnGhost} onClick={() => router.push('/result')}>
-            /result
+            結果
           </button>
         </div>
       </header>
@@ -106,7 +106,7 @@ export default function HistoryClient() {
 
         {items.length === 0 ? (
           <p className={styles.muted}>
-            保存済みの結果がありません。/result で「保存する」を押すとここに表示されます。
+            保存済みの結果がありません。結果ページで「保存する」を押すとここに表示されます。
           </p>
         ) : (
           <div className={styles.list}>
@@ -141,7 +141,7 @@ export default function HistoryClient() {
                     className={styles.btnPrimary}
                     onClick={() => loadToInput(item)}
                   >
-                    /result で開く
+                    結果ページで開く
                   </button>
                   <button
                     className={styles.btnDanger}
@@ -194,7 +194,7 @@ export default function HistoryClient() {
             </div>
             <div style={modal.footer}>
               <button style={modal.loadBtn} onClick={() => { loadToInput(viewItem); setViewItem(null); }}>
-                /result で開く
+                結果ページで開く
               </button>
               <button style={modal.deleteBtn} onClick={() => handleDelete(viewItem.id)}>
                 削除

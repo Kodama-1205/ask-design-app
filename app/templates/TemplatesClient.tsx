@@ -178,15 +178,15 @@ export default function TemplatesClient() {
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Ask Design</h1>
-          <p className={styles.sub}>Prompt Generator</p>
+          <p className={styles.sub}>プロンプト生成ツール</p>
         </div>
 
         <div className={styles.headerActions}>
           <button className={styles.btnGhost} onClick={() => router.push('/input')}>
-            /input
+            入力
           </button>
           <button className={styles.btnGhost} onClick={() => router.push('/result')}>
-            /result
+            結果
           </button>
         </div>
       </header>
@@ -198,7 +198,7 @@ export default function TemplatesClient() {
           <div className={styles.error}>{error}</div>
         ) : items.length === 0 ? (
           <div className={styles.muted}>
-            保存済みテンプレはありません。/result で生成後に保存できます。
+            保存済みテンプレはありません。結果ページで生成後に保存できます。
           </div>
         ) : (
           <div className={styles.grid}>
@@ -224,7 +224,7 @@ export default function TemplatesClient() {
                       router.push('/input');
                     }}
                   >
-                    /inputに読み込む
+                    入力ページに読み込む
                   </button>
                 </div>
               </div>
@@ -243,13 +243,13 @@ export default function TemplatesClient() {
                   style={viewMode === 'preview' ? modal.tabActive : modal.tab}
                   onClick={() => setViewMode('preview')}
                 >
-                  Preview
+                  プレビュー
                 </button>
                 <button
                   style={viewMode === 'raw' ? modal.tabActive : modal.tab}
                   onClick={() => setViewMode('raw')}
                 >
-                  Raw
+                  テキスト
                 </button>
                 <button onClick={closeView} style={modal.xBtn} aria-label="閉じる">
                   ✕

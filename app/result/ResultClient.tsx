@@ -115,7 +115,7 @@ export default function ResultClient() {
     if (!generatedPrompt.trim()) return;
     saveResult({ generated_prompt: generatedPrompt, explanation, inputs });
     setSaved(true);
-    setSaveMsg('保存しました。/history で確認できます。');
+    setSaveMsg('保存しました。履歴から確認できます。');
   };
 
   const hasResult = Boolean(generatedPrompt.trim() || explanation.trim());
@@ -133,7 +133,7 @@ export default function ResultClient() {
             入力へ
           </button>
           <button className={styles.buttonSecondary} onClick={() => router.push('/history')}>
-            /history
+            履歴
           </button>
         </div>
       </div>
@@ -153,7 +153,7 @@ export default function ResultClient() {
         </div>
       ) : !hasResult ? (
         <div className={styles.card}>
-          <p className={styles.muted}>まだ生成結果がありません。/input で生成してください。</p>
+          <p className={styles.muted}>まだ生成結果がありません。入力ページで生成してください。</p>
           <div className={styles.actions}>
             <button className={styles.buttonSecondary} onClick={() => router.push('/input')}>
               入力画面へ戻る
@@ -194,7 +194,7 @@ export default function ResultClient() {
             <div className={styles.card}>
               <h3 className={styles.cardTitle}>この結果を保存</h3>
               <p className={styles.muted} style={{ marginTop: 8, fontSize: 13 }}>
-                /history にいつでも戻れるよう保存できます。
+                履歴にいつでも戻れるよう保存できます。
               </p>
 
               <div className={styles.actions} style={{ marginTop: 12 }}>

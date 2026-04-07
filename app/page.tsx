@@ -9,15 +9,15 @@ export default function HomePage() {
         <header className={styles.header}>
           <div>
             <h1 className={styles.title}>Ask Design</h1>
-            <p className={styles.sub}>Prompt Generator</p>
+            <p className={styles.sub}>プロンプト生成ツール</p>
           </div>
 
           <div className={styles.headerActions}>
             <Link className={styles.btnGhost} href="/input">
-              /input
+              入力
             </Link>
             <Link className={styles.btnPrimary} href="/templates">
-              /templates
+              テンプレ
             </Link>
           </div>
         </header>
@@ -25,7 +25,7 @@ export default function HomePage() {
         <section className={styles.card}>
           <div className={styles.hero}>
             <div className={styles.heroLeft}>
-              <div className={styles.badge}>AI Prompt Builder</div>
+              <div className={styles.badge}>AIプロンプト生成</div>
               <h2 className={styles.heroTitle}>
                 目的と前提を入れるだけで、
                 <br />
@@ -39,10 +39,10 @@ export default function HomePage() {
 
               <div className={styles.ctaRow}>
                 <Link className={styles.btnPrimary} href="/input">
-                  すぐ始める（/input）
+                  すぐ始める
                 </Link>
                 <Link className={styles.btnGhost} href="/templates">
-                  テンプレを見る（/templates）
+                  テンプレを見る
                 </Link>
               </div>
             </div>
@@ -53,7 +53,7 @@ export default function HomePage() {
                   <span className={styles.previewDot} />
                   <span className={styles.previewDot} />
                   <span className={styles.previewDot} />
-                  <span className={styles.previewLabel}>Preview</span>
+                  <span className={styles.previewLabel}>プレビュー</span>
                 </div>
 
                 <div className={styles.previewBody}>
@@ -77,9 +77,9 @@ Excelで集計した数値をSlackへ共有する週次運用を自動化した�
                 </div>
 
                 <div className={styles.previewFoot}>
-                  <div className={styles.pill}>Copy 1 click</div>
+                  <div className={styles.pill}>1クリックコピー</div>
                   <div className={styles.pill}>Markdown</div>
-                  <div className={styles.pill}>Templates</div>
+                  <div className={styles.pill}>テンプレ</div>
                 </div>
               </div>
             </div>
@@ -90,7 +90,7 @@ Excelで集計した数値をSlackへ共有する週次運用を自動化した�
           <div className={styles.grid}>
             <Feature
               title="入力はシンプル"
-              desc="Goal / Context / skill_level / tools を入れて生成。余計な操作を減らしました。"
+              desc="目的・背景・スキル・ツールを入れて生成。余計な操作を減らしました。"
             />
             <Feature
               title="出力は見やすく"
@@ -98,7 +98,7 @@ Excelで集計した数値をSlackへ共有する週次運用を自動化した�
             />
             <Feature
               title="テンプレ運用"
-              desc="良いプロンプトはテンプレ保存。/templates から /input に読み込んで再利用できます。"
+              desc="良いプロンプトはテンプレ保存。テンプレから入力ページに読み込んで再利用できます。"
             />
           </div>
         </section>
@@ -107,16 +107,16 @@ Excelで集計した数値をSlackへ共有する週次運用を自動化した�
           <div className={styles.footerLeft}>© {new Date().getFullYear()} Ask Design</div>
           <div className={styles.footerRight}>
             <Link className={styles.footerLink} href="/input">
-              /input
+              入力
             </Link>
             <Link className={styles.footerLink} href="/templates">
-              /templates
+              テンプレ
             </Link>
             <Link className={styles.footerLink} href="/history">
-              /history
+              履歴
             </Link>
             <Link className={styles.footerLink} href="/result">
-              /result
+              結果
             </Link>
           </div>
         </footer>

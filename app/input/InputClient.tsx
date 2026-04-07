@@ -253,7 +253,7 @@ export default function InputClient() {
       <header className={styles.header}>
         <div>
           <h1 className={styles.title}>Ask Design</h1>
-          <p className={styles.sub}>Prompt Generator</p>
+          <p className={styles.sub}>プロンプト生成ツール</p>
         </div>
 
         <div className={styles.headerActions}>
@@ -266,13 +266,13 @@ export default function InputClient() {
             ガイド
           </button>
           <button className={styles.btnGhost} type="button" onClick={() => router.push('/templates')}>
-            /templates
+            テンプレ
           </button>
           <button className={styles.btnGhost} type="button" onClick={() => router.push('/history')}>
-            /history
+            履歴
           </button>
           <button className={styles.btnGhost} type="button" onClick={() => router.push('/result')}>
-            /result
+            結果
           </button>
         </div>
       </header>
@@ -290,7 +290,7 @@ export default function InputClient() {
           </div>
         )}
 
-        <label className={styles.label}>目的（Goal） *</label>
+        <label className={styles.label}>目的 *</label>
         <textarea
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
@@ -299,7 +299,7 @@ export default function InputClient() {
           disabled={isBusy}
         />
 
-        <label className={styles.label}>前提・背景（Context）</label>
+        <label className={styles.label}>前提・背景</label>
         <textarea
           value={context}
           onChange={(e) => setContext(e.target.value)}
@@ -351,7 +351,7 @@ export default function InputClient() {
         />
 
         <div className={styles.previewLine}>
-          <span className={styles.previewLabel}>現在の tools:</span>
+          <span className={styles.previewLabel}>現在のツール:</span>
           <span className={styles.previewValue}>{toolsText || '（未指定）'}</span>
         </div>
 
@@ -393,7 +393,7 @@ export default function InputClient() {
       <Modal
         open={onboardingOpen}
         title="Ask Design の使い方（1分）"
-        description="Goal と Context を入れて「完成プロンプト」を生成 → 良い結果はテンプレ保存して育てていくのがコツです。"
+        description="目的と背景を入れて「完成プロンプト」を生成 → 良い結果はテンプレ保存して育てていくのがコツです。"
         cancelText="今は閉じる"
         confirmText="このガイドを表示しない"
         secondaryText="OK（閉じる）"
@@ -407,12 +407,12 @@ export default function InputClient() {
         <div style={{ display: 'grid', gap: 10 }}>
           <Step
             no="1"
-            title="Goal を1行で"
+            title="目的を1行で"
             desc="まずは目的だけ決める（例：週次レポート自動化、提案書作成、要件整理など）"
           />
           <Step
             no="2"
-            title="Context は“前提”を箇条書きで"
+            title="前提・背景は箇条書きで"
             desc="データ形式 / 制約 / 出力先 / 何が困っているか、を書くと精度が上がります"
           />
           <Step
@@ -420,7 +420,7 @@ export default function InputClient() {
             title="スキルとツールを選ぶ"
             desc="初心者なら手順が丁寧に、上級なら実務向けに。ツール指定で指示が具体化します"
           />
-          <Step no="4" title="生成 → /result で確認" desc="スマホでも同じ結果が見られるように保存されます" />
+          <Step no="4" title="生成 → 結果を確認" desc="生成結果は履歴に保存して後から見直せます" />
           <div style={hintStyle}>※右上の「ガイド」からいつでも再表示できます</div>
         </div>
       </Modal>
