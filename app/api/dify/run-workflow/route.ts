@@ -53,43 +53,6 @@ function getClientIp(req: Request) {
 }
 
 /**
- * 合言葉トークン（ポートフォリオ用）
- * - 本番（Vercel）では必須にするのが安全
- * - ローカル開発は未設定でも動くようにする
- */
-function requirePortfolioToken(req: Request) {
-  const isProd = process.env.NODE_ENV === "production";
-  const token = process.env.PORTFOLIO_TOKEN ?? "";
-
-  if (!isProd) {
-    // devでは未設定でもOK（作業が止まらないように）
-    if (!token) return { ok: true as const };
-  } else {
-    // 本番では未設定だと危険なので止める
-    if (!token) {
-      return {
-        ok: false as const,
-        status: 500,
-        error: "Missing env: PORTFOLIO_TOKEN",
-      };
-    }
-  }
-
-  if (!token) return { ok: true as const };
-
-  const incoming =
-    req.headers.get("x-portfolio-token") ||
-    req.headers.get("X-PORTFOLIO-TOKEN") ||
-    "";
-
-  if (incoming !== token) {
-    return { ok: false as const, status: 401, error: "Unauthorized" };
-  }
-
-  return { ok: true as const };
-}
-
-/**
  * 依存なしの簡易レート制限（1IPあたり、60秒で max 回）
  * ※サーバレスの特性上「完全」ではないが、連打対策として効果はあります。
  */
@@ -153,13 +116,7 @@ export async function POST(req: Request) {
   try {
     const ip = getClientIp(req);
 
-    // ① 合言葉トークン（本番で必須）
-    const tokenCheck = requirePortfolioToken(req);
-    if (!tokenCheck.ok) {
-      return NextResponse.json({ error: tokenCheck.error }, { status: tokenCheck.status });
-    }
-
-    // ② レート制限（連打対策）
+    // ① レート制限（連打対策）
     const rl = rateLimit(ip, 5, 60_000); // 1分5回（必要なら調整）
     if (!rl.ok) {
       return NextResponse.json(
@@ -191,7 +148,7 @@ export async function POST(req: Request) {
       ),
     };
 
-    // ③ 入力サイズ制限（高額化＆DoS対策）
+    // ② 入力サイズ制限（高額化＆DoS対策）
     const limitCheck = enforceInputLimits(inputs);
     if (!limitCheck.ok) {
       return NextResponse.json({ error: limitCheck.error }, { status: limitCheck.status });
